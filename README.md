@@ -1,4 +1,21 @@
 # Monocular Dynamic View Synthesis: A Reality Check
+**This is a forked version of the original repo with changes made**
+
+### Environment Setup
+```bash
+conda activate dycheck
+
+module load stack/2024-04 gcc/8.5.0
+module load cuda/11.8.0
+module load cudnn/8.2.0.53-11.3
+module load eth_proxy
+```
+
+### Generate Covisible Masks
+Create and use `mycustom` dataset for this purpose.
+```bash
+bash scripts/generate_covisibles.sh <SEQUENCE>
+```
 
 ### [Paper](https://arxiv.org/abs/2210.13445) | [Project Page](https://hangg7.com/dycheck) | [Video](https://www.youtube.com/watch?v=WwESsNivJP8&t=21s) | [Data](https://drive.google.com/drive/folders/1ZYQQh0qkvpoGXFIcK_j4suon1Wt6MXdZ?usp=sharing)
 

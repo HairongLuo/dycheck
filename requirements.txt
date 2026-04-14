@@ -30,8 +30,8 @@ tensorflow==2.8.0
 tensorflow-hub==0.12.0
 tensorboard==2.8.0
 # Pytorch.
-https://download.pytorch.org/whl/cu115/torch-1.11.0%2Bcu115-cp38-cp38-linux_x86_64.whl
-https://download.pytorch.org/whl/cu115/torchvision-0.12.0%2Bcu115-cp38-cp38-linux_x86_64.whl
+https://download.pytorch.org/whl/cu118/torch-2.0.0%2Bcu118-cp38-cp38-linux_x86_64.whl#sha256=1f8efaebfcbb7ec3962fd8c7c3be02c6666eff53a12043006a749d647656163e
+https://download.pytorch.org/whl/cu118/torchvision-0.15.0%2Bcu118-cp38-cp38-linux_x86_64.whl#sha256=03a67002cdae2f4cc8316358f0627d35e8aa1d61be4595e7c9fbea3ac16b7c00
 lpips
 # MTTR processor requirements.
 -r dycheck/processors/mttr/requirements.txt

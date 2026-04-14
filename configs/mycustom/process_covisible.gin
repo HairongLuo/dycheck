@@ -1,0 +1,6 @@
+DATASET = 'mycustom'
+
+process_covisible.Config.data_dir = '/cluster/home/hailuo/project/dycheck/datasets/mycustom/'
+process_covisible.Config.sequence = %SEQUENCE
+process_covisible.Config.factor = 1
+process_covisible.Config.chunk = 16

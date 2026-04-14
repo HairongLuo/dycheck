@@ -154,10 +154,15 @@ class Record3DProcessor(object):
             )
 
     def _process_train_points(self):
-        def process_zipped_ply(obj, name):
-            pcd = trimesh.load(
-                trimesh.util.wrap_as_stream(obj.read(name)), file_type="ply"
-            )
+        # def process_zipped_ply(obj, name):
+        #     pcd = trimesh.load(
+        #         trimesh.util.wrap_as_stream(obj.read(name)), file_type="ply"
+        #     )
+        def process_zipped_ply(zip_path, name):
+            with ZipFile(zip_path) as obj:
+                pcd = trimesh.load(
+                    trimesh.util.wrap_as_stream(obj.read(name)), file_type="ply"
+                )
             points = geometry.matv(
                 self.rotate_transfm, np.asarray(pcd.vertices)
             )
@@ -175,7 +180,8 @@ class Record3DProcessor(object):
             names = names[self.start : self.end]
             self._train_points, self._train_point_rgbs = common.tree_collate(
                 common.parallel_map(
-                    lambda name: process_zipped_ply(ply_zip, name),
+                    # lambda name: process_zipped_ply(ply_zip, name),
+                    lambda name: process_zipped_ply(ply_zip_path, name),
                     names,
                     show_pbar=True,
                     desc="* Processing train points",
@@ -352,19 +358,19 @@ class Record3DProcessor(object):
         self.near = np.quantile(dists, 0.001) * 3 / 4
         self.far = np.quantile(dists, 0.999) * 5 / 4
 
-        bkgd_masks = 1 - np.array(
-            common.parallel_map(
-                lambda img: utils.dilate(img, self.bkgd_kernel_size),
-                self.train_masks,
-            )
-        )
-        self.bkgd_points, self.bkgd_point_rgbs = utils.tsdf_fusion(
-            self.train_rgbas[..., :3],
-            np.where(bkgd_masks == 1, self.train_depths[..., 0], 0),
-            self.train_cameras,
-            voxel_length=self.bbox.ptp(axis=0).mean() / 512,
-            depth_far=self.depth_far,
-        )
+        # bkgd_masks = 1 - np.array(
+        #     common.parallel_map(
+        #         lambda img: utils.dilate(img, self.bkgd_kernel_size),
+        #         self.train_masks,
+        #     )
+        # )
+        # self.bkgd_points, self.bkgd_point_rgbs = utils.tsdf_fusion(
+        #     self.train_rgbas[..., :3],
+        #     np.where(bkgd_masks == 1, self.train_depths[..., 0], 0),
+        #     self.train_cameras,
+        #     voxel_length=self.bbox.ptp(axis=0).mean() / 512,
+        #     depth_far=self.depth_far,
+        # )
 
         self.lookat = geometry.utils.tringulate_rays(
             np.stack([c.position for c in self.train_cameras], axis=0),
@@ -496,16 +502,19 @@ class Record3DProcessor(object):
         *,
         trees: int = 5,
         checks: int = 50,
-        min_match_count: int = 25,
+        # min_match_count: int = 25,
+        min_match_count: int = 5,
     ):
         if self.has_novel_view:
             train_masks = self.train_rgbas[..., 3:]
+            # (T, H, W)
             train_grays = np.array(
                 [
                     cv2.cvtColor(i, cv2.COLOR_RGB2GRAY)
                     for i in self.train_rgbas[..., :3]
                 ]
             )
+            # list of length 1 with element of shape (T, H, W)
             val_grays = [
                 np.array(
                     [cv2.cvtColor(i, cv2.COLOR_RGB2GRAY) for i in vi[..., :3]]
@@ -541,6 +550,7 @@ class Record3DProcessor(object):
                 return tuple(kps[i] for i in kp_inds), descs[kp_inds]
 
             # SIFT detects keypoints starting from (0, 0) at corner.
+            # train_kps and train_descs: (T, N) where N is the number of keypoints in the corresponding frame.
             train_kps, train_descs = list(
                 zip(
                     *common.parallel_map(
@@ -554,6 +564,7 @@ class Record3DProcessor(object):
                     )
                 )
             )
+            # (1, T, N) where N is the number of keypoints in the corresponding frame.
             val_kps, val_descs = [], []
             for vg in common.tqdm(
                 val_grays,
@@ -577,10 +588,13 @@ class Record3DProcessor(object):
                 camera, depth, kps, descs, kps_to, descs_to
             ):
                 matches = flann.knnMatch(descs, descs_to, k=2)
+                # print(f'{len(matches)} matches found between {len(kps)} and {len(kps_to)} keypoints.')
                 good_matches = []
                 for m, n in matches:
                     if m.distance < 0.7 * n.distance:
+                    # if m.distance < 0.8 * n.distance:
                         good_matches.append(m)
+                print(f'{len(good_matches)} good matches found among {len(matches)} matches.')
                 if len(good_matches) > min_match_count:
                     pixels = np.array(
                         [kps[m.queryIdx].pt for m in good_matches], np.float32
@@ -638,6 +652,28 @@ class Record3DProcessor(object):
                 points = np.concatenate(points, axis=0)
                 pixels = np.concatenate(_pixels, axis=0)
                 pixels_to = np.concatenate(_pixels_to, axis=0)
+
+                # Non-parallel processing for debugging
+                # all_results = []
+                # for i in common.tqdm(range(Tmin), desc="Matching features", position=1, leave=False):
+                #     result = match_points_pixels(
+                #         self.train_cameras[i],
+                #         self.train_depths[i],
+                #         train_kps[i],
+                #         train_descs[i],
+                #         _val_kps[i],
+                #         _val_descs[i]
+                #     )
+                #     all_results.append(result)
+                
+                # # Separate the results
+                # points_list = [result[0] for result in all_results]
+                # pixels_list = [result[1] for result in all_results]
+                # pixels_to_list = [result[2] for result in all_results]
+                
+                # points = np.concatenate(points_list, axis=0)
+                # pixels = np.concatenate(pixels_list, axis=0)
+                # pixels_to = np.concatenate(pixels_to_list, axis=0)
 
                 success, rvec, tvec, inliers = cv2.solvePnPRansac(
                     points,
@@ -907,22 +943,22 @@ class Record3DProcessor(object):
         }
         io.dump(osp.join(self.dump_dir, "extra.json"), extra_dict)
 
-        logging.info("* Dumping bkgd points.")
-        io.dump(osp.join(self.dump_dir, "points.npy"), self.bkgd_points)
+        # logging.info("* Dumping bkgd points.")
+        # io.dump(osp.join(self.dump_dir, "points.npy"), self.bkgd_points)
 
     def process(self):
         self._process_train_points()
         self._process_train_cameras()
         self._process_train_rgbas_depths()
-        self._process_train_masks()
-        self._visualize_train_video()
+        # self._process_train_masks()
+        # self._visualize_train_video()
 
         self._process_val_rgbas()
         self._process_val_cameras()
         self._visualize_val_video()
 
         self._process_scene()
-        self._visualize_scene()
+        # self._visualize_scene()
 
         self._dump_data()
 
